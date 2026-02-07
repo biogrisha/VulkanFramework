@@ -1,7 +1,6 @@
 find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(Vulkan REQUIRED)
-find_package(Freetype REQUIRED)
 find_package(Boost REQUIRED COMPONENTS signals2)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -49,7 +48,6 @@ target_link_libraries(VulkanFramework
 		glfw
 		glm::glm
 		Vulkan::Vulkan
-		Freetype::Freetype
 		PUBLIC
 		MyRTTI
 		nlohmann_json::nlohmann_json

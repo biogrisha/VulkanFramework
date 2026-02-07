@@ -15,13 +15,16 @@ class FVulkanContext
 {
 public:
 	~FVulkanContext();
+	void Init(bool bEnableValidationLayer);
 	void Init(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice);
 	void CreateLogicalDevice();
 
 private:
+	void CreateInstance(bool bEnableValidationLayers);
 	void CreateVmaAllocator();
 	void CreateCommandPool();
-
+	void SetupDebugMessenger(bool bEnableValidationLayer);
+	void PickPhysicalDevice();
 	//Device
 	std::vector<const char*> RequiredDeviceExtension = {
 		vk::KHRSwapchainExtensionName,
@@ -36,21 +39,21 @@ public:
 
 	uint32_t GraphicsQueueInd = 0;
 	VmaAllocator VmaAllocator;
+	const int MaxFramesInFlight = 2;
 
 	vk::raii::Context Context;
 	vk::raii::Instance Instance = nullptr;
 	vk::raii::PhysicalDevice PhysicalDevice = nullptr;
+	vk::raii::Device Device = nullptr;
 	vk::raii::Queue GraphicsQueue = nullptr;
 	vk::raii::CommandPool CommandPool = nullptr;
-	vk::raii::Device Device = nullptr;
+	vk::raii::DebugUtilsMessengerEXT DebugMessenger = nullptr;
 };
 
 class FVulkanStatic
 {
 public:
-	static void SubscribeToContext(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice);
-	static void UnsubscribeFromContext();
-	static inline std::shared_ptr<FVulkanContext> Context = nullptr;
-private:
-	static inline uint32_t UserCount = 0;
+	static void InitContext();
+	static void ClearContext();
+	static inline std::unique_ptr<FVulkanContext> Context = nullptr;
 };
