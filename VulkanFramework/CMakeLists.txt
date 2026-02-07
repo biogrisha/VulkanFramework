@@ -21,6 +21,7 @@ add_library(VulkanFramework STATIC
 	include/ImageBuffer.h
 	include/Rendering.h
 	include/Atlas.h
+	include/Display.h
 	src/DescriptorManager.cpp
 	src/DescriptorSetLayout.cpp
 	src/Pipeline.cpp
@@ -33,6 +34,7 @@ add_library(VulkanFramework STATIC
 	src/ImageBuffer.cpp
 	src/Rendering.cpp
 	src/Atlas.cpp
+	src/Display.cpp
 )
 
 # Set include directories
