@@ -5,6 +5,7 @@
 FVulkanContext::~FVulkanContext()
 {
 	vmaDestroyAllocator(VmaAllocator);
+	glfwTerminate();
 }
 
 std::vector<const char*> getRequiredExtensions(bool bEnableValidationLayers)

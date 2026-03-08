@@ -23,9 +23,10 @@ void FAtlas::Init()
 	stbi_uc* pixels = stbi_load(ImgPath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-	Image = MyRTTI::MakeTypedUnique<FImageBuffer>();
-	Image->SetExtent({uint32_t(texWidth), uint32_t(texHeight)});
-	Image->AddUsageFlags(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+	FImageBufferInfo Info;
+	Info.Extent = vk::Extent3D{ uint32_t(texWidth), uint32_t(texHeight), 1};
+	Info.UsageFlags = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst;
+	Image = MyRTTI::MakeTypedUnique<FImageBuffer>(Info);
 	Image->Init();
 	Image->UpdateImageFromData(pixels);
 

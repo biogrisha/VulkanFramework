@@ -1,16 +1,36 @@
 #include "ImageBuffer.h"
+#include "ImageBuffer.h"
+#include "ImageBuffer.h"
+#include "ImageBuffer.h"
+#include "ImageBuffer.h"
 #include <VulkanContext.h>
 #include <VulkanHelpers.h>
+
 FImageBuffer::~FImageBuffer()
 {
 	DestroyImage();
 }
 
-void FImageBuffer::SetExtent(const VkExtent2D& InExtent)
+FImageBuffer::FImageBuffer(const FImageBufferInfo& ImageBufferInfo)
 {
-	if (Extent.height != InExtent.height || Extent.width != InExtent.width)
+	Info = ImageBufferInfo;
+	Info.UsageFlags |= vk::ImageUsageFlagBits::eSampled;
+}
+
+FImageBuffer::FImageBuffer(VkImage ExternalImage, vk::ImageLayout ImageLayout, vk::AccessFlags ImageAccess, const FImageBufferInfo& ImageBufferInfo)
+{
+	bExternal = true;
+	Image = ExternalImage;
+	Info = ImageBufferInfo;
+	Layout = ImageLayout;
+	Access = ImageAccess;
+}
+
+void FImageBuffer::SetExtent(const vk::Extent3D& InExtent)
+{
+	if (InExtent != Info.Extent)
 	{
-		Extent = InExtent;
+		Info.Extent = InExtent;
 		if(bInitialized)
 		{
 			auto OldAllocation = Allocation;
@@ -22,46 +42,40 @@ void FImageBuffer::SetExtent(const VkExtent2D& InExtent)
 	}
 }
 
-void FImageBuffer::SetFormat(VkFormat InFormat)
-{
-	Format = InFormat;
-}
-
-void FImageBuffer::AddUsageFlags(VkImageUsageFlags Flags)
-{
-	ImageUsageFlags = Flags;
-}
-
 void FImageBuffer::Init()
 {
+	//Fill create info
 	VkImageCreateInfo ImageCreateInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-	ImageCreateInfo.format = Format;
-	ImageCreateInfo.imageType = VkImageType::VK_IMAGE_TYPE_2D;
-	ImageCreateInfo.extent = {Extent.width,Extent.height, 1};
+	ImageCreateInfo.format = static_cast<VkFormat>(Info.Format);
+	ImageCreateInfo.imageType = static_cast<VkImageType>(Info.Type);
+	ImageCreateInfo.extent = static_cast<VkExtent3D>(Info.Extent);
 	ImageCreateInfo.mipLevels = 1;
 	ImageCreateInfo.arrayLayers = 1;
 	ImageCreateInfo.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
 	ImageCreateInfo.tiling = VkImageTiling::VK_IMAGE_TILING_OPTIMAL;
-	ImageCreateInfo.usage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT | ImageUsageFlags;
+	ImageCreateInfo.usage = static_cast<VkImageUsageFlags>(Info.UsageFlags);
 	ImageCreateInfo.sharingMode = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
 	ImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-
+	//Fill allocation info
+	//Allocate on device
 	VmaAllocationCreateInfo AllocInfo = {};
 	AllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	AllocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
+	//Create image
 	vmaCreateImage(FVulkanStatic::Context->VmaAllocator, &ImageCreateInfo, &AllocInfo, &Image, &Allocation, nullptr);
 
-	vk::ImageViewCreateInfo ViewInfo({}, Image, vk::ImageViewType::e2D, vk::Format(Format), {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+	//Fill image view info
+	vk::ImageViewCreateInfo ViewInfo({}, Image, VkHelpers::ToImageViewType(Info.Type), Info.Format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
 	ImageView = vk::raii::ImageView(FVulkanStatic::Context->Device, ViewInfo);
 
-	//Creating Sampler
-	vk::PhysicalDeviceProperties properties = FVulkanStatic::Context->PhysicalDevice.getProperties();
+	//Fill sampler info
+	vk::PhysicalDeviceProperties PhysicalDeviceProperties = FVulkanStatic::Context->PhysicalDevice.getProperties();
 	vk::SamplerCreateInfo SamplerInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
 		vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat,
 		vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0, 1,
-		properties.limits.maxSamplerAnisotropy, vk::False, vk::CompareOp::eAlways);
+		PhysicalDeviceProperties.limits.maxSamplerAnisotropy, vk::False, vk::CompareOp::eAlways);
 
 	SamplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
 	SamplerInfo.unnormalizedCoordinates = vk::False;
@@ -72,59 +86,80 @@ void FImageBuffer::Init()
 	SamplerInfo.minLod = 0.0f;
 	SamplerInfo.maxLod = 0.0f;
 
+	//Create sampler
 	Sampler = vk::raii::Sampler(FVulkanStatic::Context->Device, SamplerInfo);
 
+	//Start command (transfer undefined->shader read only)
 	auto CommandBuffer = VkHelpers::BeginSingleTimeCommands();
 
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // or UNDEFINED
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	//Fill memory barrier info
+	vk::ImageMemoryBarrier barrier{};
+	barrier.image = Image;
+
+	barrier.oldLayout = vk::ImageLayout::eUndefined;
+	barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = Image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = 1;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
 
-	// Access masks depend on old usage:
-	barrier.srcAccessMask = VK_ACCESS_NONE;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	barrier.srcAccessMask = vk::AccessFlags{};
+	barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-	vkCmdPipelineBarrier(
-		*CommandBuffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,          // srcStageMask (or TOP_OF_PIPE if UNDEFINED)
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,			// dstStageMask
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
+	CommandBuffer.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTopOfPipe,
+		vk::PipelineStageFlagBits::eFragmentShader,
+		{},
+		nullptr,
+		nullptr,
+		barrier
 	);
+
 	VkHelpers::EndSingleTimeCommands(CommandBuffer);
+	Layout = vk::ImageLayout::eShaderReadOnlyOptimal;
+	Access = vk::AccessFlagBits::eShaderRead;
+	//Cache descriptor info
 	DescriptorImageInfo = vk::DescriptorImageInfo(Sampler, ImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+
 	bInitialized = true;
 }
 
 void FImageBuffer::UpdateImageFromData(void* InDataPointer)
 {
-	uint32_t BufferSize = Extent.height * Extent.width * 4;
+	assert(Info.Type == vk::ImageType::e2D);
+
+	//Fill buffer info
+	FBufferInfo BufferInfo;
+	BufferInfo.bDeviceLocal = false;
+	BufferInfo.Usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+	//Calculate buffer size
+	uint32_t BufferSize = Info.Extent.height * Info.Extent.width * 4;
+
+	//Create staging buffer for image data
 	auto StagingBuffer = MyRTTI::MakeTypedUnique<FBuffer>();
-	FBufferInfo Info;
-	Info.bDeviceLocal = false;
-	Info.Usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	StagingBuffer->SetProperties(Info);
+	StagingBuffer->SetProperties(BufferInfo);
 	StagingBuffer->SetData(BufferSize, InDataPointer);
+
+	//Copy buffer into image
 	auto CommandBuffer = VkHelpers::BeginSingleTimeCommands();
-	VkHelpers::ImageTransition_UnknownToTransferDst(this, CommandBuffer);
+	VkHelpers::ImageTransition_ToTransferDst(this, CommandBuffer,{});
 	VkHelpers::CopyBufferToImage(StagingBuffer.get(), this, CommandBuffer);
-	VkHelpers::ImageTransition_TransferDstToShaderRead(this, CommandBuffer);
+	VkHelpers::ImageTransition_ToShaderRead(this, CommandBuffer, vk::PipelineStageFlagBits::eTransfer);
 	VkHelpers::EndSingleTimeCommands(CommandBuffer);
 }
 
 void FImageBuffer::DestroyImage()
 {
+	if (bExternal)
+	{
+		return;
+	}
 	vmaDestroyImage(FVulkanStatic::Context->VmaAllocator, Image, Allocation);
 }
 
@@ -143,12 +178,32 @@ vk::Sampler FImageBuffer::GetSampler()
 	return Sampler;
 }
 
-VkExtent2D FImageBuffer::GetExtent()
+VkExtent3D FImageBuffer::GetExtent()
 {
-	return Extent;
+	return static_cast<VkExtent3D>(Info.Extent);
 }
 
 vk::DescriptorImageInfo* FImageBuffer::GetDescriptorImageInfo()
 {
 	return &DescriptorImageInfo;
+}
+
+vk::ImageLayout FImageBuffer::GetLayout()
+{
+	return Layout;
+}
+
+vk::AccessFlags FImageBuffer::GetAccess()
+{
+	return Access;
+}
+
+void FImageBuffer::SetLayout(vk::ImageLayout InLayout)
+{
+	Layout = InLayout;
+}
+
+void FImageBuffer::SetAccess(vk::AccessFlags InAccess)
+{
+	Access = InAccess;
 }

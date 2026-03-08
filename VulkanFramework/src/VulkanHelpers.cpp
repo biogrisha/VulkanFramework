@@ -1,4 +1,12 @@
 #include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
+#include "VulkanHelpers.h"
 #include "VulkanContext.h"
 #include <fstream>
 vk::raii::ShaderModule VkHelpers::createShaderModule(const std::vector<char>& code, const vk::raii::Device& device)
@@ -97,8 +105,6 @@ void VkHelpers::CopyBufferToImage(FBuffer* Buffer, FImageBuffer* ImageBuffer, co
 
 void VkHelpers::CopyImageToImage(FImageBuffer* Src, FImageBuffer* Dst, const vk::raii::CommandBuffer& CommandBuffer)
 {
-	ImageTransition_ShaderReadToTransferSrc(Src, CommandBuffer);
-	ImageTransition_UnknownToTransferDst(Dst, CommandBuffer);
 	vk::ImageCopy Copy;
 	Copy.srcOffset = vk::Offset3D{ 0,0,0 };
 	Copy.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
@@ -113,15 +119,12 @@ void VkHelpers::CopyImageToImage(FImageBuffer* Src, FImageBuffer* Dst, const vk:
 	Copy.dstSubresource.baseArrayLayer = 0;
 	Copy.dstSubresource.layerCount = 1;
 	CommandBuffer.copyImage(Src->GetImage(), vk::ImageLayout::eTransferSrcOptimal, Dst->GetImage(), vk::ImageLayout::eTransferDstOptimal, Copy);
-	ImageTransition_TransferSrcToShaderRead(Src, CommandBuffer);
-	ImageTransition_TransferDstToShaderRead(Dst, CommandBuffer);
 }
 
 void VkHelpers::ClearImage(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
-	ImageTransition_UnknownToTransferDst(Image, CommandBuffer);
 	vk::ClearColorValue Color;
-	Color.setFloat32({ 0,0,0,0 });
+	Color.setFloat32({ 0.2,0,0,0 });
 	vk::ImageSubresourceRange Range;
 	Range.aspectMask = vk::ImageAspectFlagBits::eColor;
 	Range.baseMipLevel = 0;
@@ -129,7 +132,6 @@ void VkHelpers::ClearImage(FImageBuffer* Image, const vk::raii::CommandBuffer& C
 	Range.baseArrayLayer = 0;
 	Range.layerCount = 1;
 	CommandBuffer.clearColorImage(Image->GetImage(), vk::ImageLayout::eTransferDstOptimal, Color, Range);
-	ImageTransition_TransferDstToShaderRead(Image, CommandBuffer);
 }
 
 vk::DescriptorType VkHelpers::ConvertBufferToDescriptor(VkBufferUsageFlagBits BufferUsage)
@@ -155,7 +157,7 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 	Buffer->Init(ImageExtent.height * ImageExtent.width * 4);
 
 	auto CommandBuffer = BeginSingleTimeCommands();
-	ImageTransition_ShaderReadToTransferSrc(ImageBuffer, CommandBuffer);
+	ImageTransition_ToTransferSrc(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 	vk::BufferImageCopy region{};
 	region.bufferOffset = 0;
 	region.bufferRowLength = 0;
@@ -171,127 +173,111 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 
 	CommandBuffer.copyImageToBuffer(ImageBuffer->GetImage(), vk::ImageLayout::eTransferSrcOptimal, *Buffer->GetBuffer(), region);
 	
-	ImageTransition_TransferSrcToShaderRead(ImageBuffer, CommandBuffer);
+	ImageTransition_ToShaderRead(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eTransfer);
 	EndSingleTimeCommands(CommandBuffer);
 	return Buffer;
 }
 
-void VkHelpers::ImageTransition_ShaderReadToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
+void VkHelpers::ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer,
+	vk::ImageLayout NewLayout,
+	vk::AccessFlags DstAccess, 
+	vk::PipelineStageFlags SrcStage, vk::PipelineStageFlags DstStage)
 {
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	//Fill memory barrier info
+	vk::ImageMemoryBarrier barrier{};
+	barrier.image = Image->GetImage();
+
+	barrier.oldLayout = Image->GetLayout();
+	barrier.newLayout = NewLayout;
+
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = Image->GetImage();
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = 1;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
 
-	// Access masks depend on old usage:
-	barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	barrier.srcAccessMask = Image->GetAccess();
+	barrier.dstAccessMask = DstAccess;
 
-	vkCmdPipelineBarrier(
-		*CommandBuffer,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
+	CommandBuffer.pipelineBarrier(
+		SrcStage,
+		DstStage,
+		{},
+		nullptr,
+		nullptr,
+		barrier
+	);
+	Image->SetLayout(NewLayout);
+	Image->SetAccess(DstAccess);
+}
+
+void VkHelpers::ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
+{
+	ImageTransitionGeneral(
+		Image,
+		CommandBuffer,
+		vk::ImageLayout::eTransferSrcOptimal,
+		vk::AccessFlagBits::eTransferRead,
+		SrcStage,
+		vk::PipelineStageFlagBits::eTransfer
 	);
 }
 
-void VkHelpers::ImageTransition_UnknownToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
+void VkHelpers::ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
 {
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = Image->GetImage();
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-
-	vkCmdPipelineBarrier(
-		*CommandBuffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
+	ImageTransitionGeneral(
+		Image,
+		CommandBuffer,
+		vk::ImageLayout::eTransferDstOptimal,
+		vk::AccessFlagBits::eTransferWrite,
+		SrcStage,
+		vk::PipelineStageFlagBits::eTransfer
 	);
 }
 
-void VkHelpers::ImageTransition_TransferSrcToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
+void VkHelpers::ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
 {
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = Image->GetImage();
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-
-	// Access masks depend on old usage:
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	vkCmdPipelineBarrier(
-		*CommandBuffer,
-		VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
+	ImageTransitionGeneral(
+		Image,
+		CommandBuffer,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::AccessFlagBits::eShaderRead,
+		SrcStage,
+		vk::PipelineStageFlagBits::eFragmentShader
 	);
 }
 
-void VkHelpers::ImageTransition_TransferDstToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
+void VkHelpers::ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
 {
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = Image->GetImage();
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	vkCmdPipelineBarrier(
-		*CommandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
+	ImageTransitionGeneral(
+		Image,
+		CommandBuffer,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		vk::AccessFlagBits::eColorAttachmentWrite,
+		SrcStage,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput
 	);
+}
+
+vk::ImageViewType VkHelpers::ToImageViewType(vk::ImageType type, bool isArray)
+{
+	switch (type)
+	{
+	case vk::ImageType::e1D:
+		return isArray ? vk::ImageViewType::e1DArray : vk::ImageViewType::e1D;
+
+	case vk::ImageType::e2D:
+		return isArray ? vk::ImageViewType::e2DArray : vk::ImageViewType::e2D;
+
+	case vk::ImageType::e3D:
+		return vk::ImageViewType::e3D;
+
+	default:
+		throw std::runtime_error("Unsupported image type");
+	}
 }
 
 VkShaderModule NVkHelpers::createShaderModule(const uint32_t* code, uint32_t size, VkDevice device)

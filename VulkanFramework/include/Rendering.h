@@ -6,7 +6,7 @@
 struct FRunPipelineInfo
 {
 	uint16_t				PipelineId = UINT16_MAX;
-	vk::Extent2D			OutputExtent = {0,0};
+	vk::Extent3D			OutputExtent = vk::Extent3D{0,0,0};
 	std::vector<FBuffer*>	VertexBuffers;
 	FBuffer*				IndexBuffer = nullptr;
 	std::vector<uint16_t>	DescriptorSets;

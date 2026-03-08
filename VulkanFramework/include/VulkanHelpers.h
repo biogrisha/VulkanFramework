@@ -33,13 +33,17 @@ namespace VkHelpers
 
 	std::unique_ptr<FBuffer> ConvertImageToBuffer(FImageBuffer* ImageBuffer);
 
-	void ImageTransition_ShaderReadToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
-
-	void ImageTransition_UnknownToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
-
-	void ImageTransition_TransferSrcToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
-
-	void ImageTransition_TransferDstToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
+	void ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer,
+		vk::ImageLayout NewLayout,
+		vk::AccessFlags DstAccess, 
+		vk::PipelineStageFlags SrcStage, vk::PipelineStageFlags DstStage);
+	
+	void ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
+	void ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
+	void ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
+	void ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
+	
+	vk::ImageViewType ToImageViewType(vk::ImageType type, bool isArray = false);
 }
 
 namespace NVkHelpers
