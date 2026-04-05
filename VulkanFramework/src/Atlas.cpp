@@ -25,7 +25,7 @@ void FAtlas::Init()
 
 	FImageBufferInfo Info;
 	Info.Extent = vk::Extent3D{ uint32_t(texWidth), uint32_t(texHeight), 1};
-	Info.UsageFlags = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst;
+	Info.UsageFlags |= vk::ImageUsageFlagBits::eTransferDst;
 	Image = MyRTTI::MakeTypedUnique<FImageBuffer>(Info);
 	Image->Init();
 	Image->UpdateImageFromData(pixels);

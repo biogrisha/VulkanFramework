@@ -129,7 +129,7 @@ void FImageBuffer::Init()
 	bInitialized = true;
 }
 
-void FImageBuffer::UpdateImageFromData(void* InDataPointer)
+void FImageBuffer::UpdateImageFromData(void* InDataPointer, vk::PipelineStageFlags FromStage)
 {
 	assert(Info.Type == vk::ImageType::e2D);
 
@@ -148,7 +148,7 @@ void FImageBuffer::UpdateImageFromData(void* InDataPointer)
 
 	//Copy buffer into image
 	auto CommandBuffer = VkHelpers::BeginSingleTimeCommands();
-	VkHelpers::ImageTransition_ToTransferDst(this, CommandBuffer,{});
+	VkHelpers::ImageTransition_ToTransferDst(this, CommandBuffer, FromStage);
 	VkHelpers::CopyBufferToImage(StagingBuffer.get(), this, CommandBuffer);
 	VkHelpers::ImageTransition_ToShaderRead(this, CommandBuffer, vk::PipelineStageFlagBits::eTransfer);
 	VkHelpers::EndSingleTimeCommands(CommandBuffer);

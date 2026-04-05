@@ -23,7 +23,7 @@ public:
 	FImageBuffer(VkImage ExternalImage, vk::ImageLayout ImageLayout, vk::AccessFlags ImageAccess, const FImageBufferInfo& ImageBufferInfo);
 	void SetExtent(const vk::Extent3D& InExtent);
 	void Init();
-	void UpdateImageFromData(void* InDataPointer);
+	void UpdateImageFromData(void* InDataPointer, vk::PipelineStageFlags FromStage = vk::PipelineStageFlagBits::eFragmentShader);
 
 	VkImage GetImage();
 	vk::ImageView GetImageView();
