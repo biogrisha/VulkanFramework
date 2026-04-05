@@ -157,7 +157,7 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 	Buffer->Init(ImageExtent.height * ImageExtent.width * 4);
 
 	auto CommandBuffer = BeginSingleTimeCommands();
-	ImageTransition_ToTransferSrc(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eColorAttachmentOutput);
+	ImageTransition_ToTransferSrc(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eFragmentShader);
 	vk::BufferImageCopy region{};
 	region.bufferOffset = 0;
 	region.bufferRowLength = 0;
