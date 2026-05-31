@@ -11,6 +11,8 @@ friend std::unique_ptr<Type> MyRTTI::MakeTypedUnique(Args&& ... args);\
 template<typename To, typename From>\
 friend bool MyRTTI::Is(From* a);\
 template<typename To, typename From>\
+friend bool MyRTTI::Is(const std::unique_ptr<From>& a);\
+template<typename To, typename From>\
 friend To* MyRTTI::Cast(From* a);\
 template<typename To, typename From>\
 friend To* MyRTTI::Cast(const std::shared_ptr<From>& a);\
@@ -94,6 +96,25 @@ namespace MyRTTI
 
 	template <typename To, typename From>
 	bool Is(From* a)
+	{
+		if (!a)
+		{
+			return false;
+		}
+
+		if (a->GetTypeInfo()->Type == To::TypeInfo.Type)
+		{
+			return true;
+		}
+		if (a->GetTypeInfo()->TypeSet.contains(To::TypeInfo.Type))
+		{
+			return true;
+		}
+		return false;
+	}
+
+	template <typename To, typename From>
+	bool Is(const std::unique_ptr<From>& a)
 	{
 		if (!a)
 		{
