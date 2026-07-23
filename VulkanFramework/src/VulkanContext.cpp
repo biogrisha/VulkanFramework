@@ -4,8 +4,16 @@
 
 FVulkanContext::~FVulkanContext()
 {
+	CommandPool.clear();
+	GraphicsQueue.clear();
 	vmaDestroyAllocator(VmaAllocator);
 	glfwTerminate();
+	if (m_foreign)
+	{
+		Instance.release();
+		PhysicalDevice.release();
+		Device.release();
+	}
 }
 
 std::vector<const char*> getRequiredExtensions(bool bEnableValidationLayers)
@@ -34,7 +42,7 @@ void FVulkanContext::CreateInstance(bool bEnableValidationLayers)
 	std::vector<char const*> requiredLayers;
 	if (bEnableValidationLayers)
 	{
-		const std::vector<char const*> validationLayers = {	"VK_LAYER_KHRONOS_validation" };
+		const std::vector<char const*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 		requiredLayers.assign(validationLayers.begin(), validationLayers.end());
 	}
 
@@ -78,17 +86,21 @@ void FVulkanContext::Init(bool bEnableValidationLayer)
 	CreateInstance(bEnableValidationLayer);
 	SetupDebugMessenger(bEnableValidationLayer);
 	PickPhysicalDevice();
+	findGraphicsQueueInd();
 	CreateLogicalDevice();
 	GraphicsQueue = vk::raii::Queue(Device, GraphicsQueueInd, 0);
 	CreateVmaAllocator();
 	CreateCommandPool();
 }
 
-void FVulkanContext::Init(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice)
+void FVulkanContext::Init(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice, VkDevice device)
 {
+	m_foreign = true;
+	glfwInit();
 	Instance = vk::raii::Instance(Context, InInstance);
 	PhysicalDevice = vk::raii::PhysicalDevice(Instance, InPhysicalDevice);
-	CreateLogicalDevice();
+	Device = vk::raii::Device(PhysicalDevice, device);
+	findGraphicsQueueInd();
 	GraphicsQueue = vk::raii::Queue(Device, GraphicsQueueInd, 0);
 	CreateVmaAllocator();
 	CreateCommandPool();
@@ -157,7 +169,7 @@ void FVulkanContext::PickPhysicalDevice()
 	}
 }
 
-void FVulkanContext::CreateLogicalDevice()
+void FVulkanContext::findGraphicsQueueInd()
 {
 	// find the index of the first queue family that supports graphics
 	std::vector<vk::QueueFamilyProperties> queueFamilyProperties = PhysicalDevice.getQueueFamilyProperties();
@@ -166,8 +178,12 @@ void FVulkanContext::CreateLogicalDevice()
 	auto graphicsQueueFamilyProperty = std::ranges::find_if(queueFamilyProperties, [](auto const& qfp)
 		{ return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0); });
 
-	auto GraphicsQueueIndex = static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
+	GraphicsQueueInd = static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), graphicsQueueFamilyProperty));
 
+}
+
+void FVulkanContext::CreateLogicalDevice()
+{
 	// query for Vulkan 1.3 features
 	vk::PhysicalDeviceVulkan13Features PhysicalDeviceVulkan13Features;
 	PhysicalDeviceVulkan13Features.synchronization2 = true;
@@ -181,15 +197,15 @@ void FVulkanContext::CreateLogicalDevice()
 	physicalDeviceFeatures2.features.logicOp = true;
 
 	vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
-		physicalDeviceFeatures2,          
-		PhysicalDeviceVulkan13Features,  
+		physicalDeviceFeatures2,
+		PhysicalDeviceVulkan13Features,
 		PhysicalDeviceExtendedDynamicStateFeaturesEXT
 	};
 
 	// create a Device
 	float queuePriority = 0.0f;
 	vk::DeviceQueueCreateInfo deviceQueueCreateInfo;
-	deviceQueueCreateInfo.queueFamilyIndex = GraphicsQueueIndex;
+	deviceQueueCreateInfo.queueFamilyIndex = GraphicsQueueInd;
 	deviceQueueCreateInfo.queueCount = 1;
 	deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
 
@@ -214,6 +230,7 @@ void FVulkanContext::CreateVmaAllocator()
 	allocatorInfo.device = *Device;
 	allocatorInfo.instance = *Instance;
 	allocatorInfo.vulkanApiVersion = vk::ApiVersion14;
+	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 	auto Result = vmaCreateAllocator(&allocatorInfo, &VmaAllocator);
 	if (Result != VK_SUCCESS) {
 		throw std::runtime_error("failed to create VMA allocator!");
@@ -232,6 +249,12 @@ void FVulkanStatic::InitContext()
 {
 	Context = std::make_unique<FVulkanContext>();
 	Context->Init(true);
+}
+
+void FVulkanStatic::InitContext(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice, VkDevice device)
+{
+	Context = std::make_unique<FVulkanContext>();
+	Context->Init(InInstance, InPhysicalDevice, device);
 }
 
 void FVulkanStatic::ClearContext()

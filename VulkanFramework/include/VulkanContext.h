@@ -16,7 +16,7 @@ class FVulkanContext
 public:
 	~FVulkanContext();
 	void Init(bool bEnableValidationLayer);
-	void Init(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice);
+	void Init(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice, VkDevice device);
 	void CreateLogicalDevice();
 
 private:
@@ -25,6 +25,7 @@ private:
 	void CreateCommandPool();
 	void SetupDebugMessenger(bool bEnableValidationLayer);
 	void PickPhysicalDevice();
+	void findGraphicsQueueInd();
 	//Device
 	std::vector<const char*> RequiredDeviceExtension = {
 		vk::KHRSwapchainExtensionName,
@@ -36,7 +37,7 @@ private:
 		vk::KHRDepthStencilResolveExtensionName
 	};
 public:
-
+	bool m_foreign = false;
 	uint32_t GraphicsQueueInd = 0;
 	VmaAllocator VmaAllocator;
 	const int MaxFramesInFlight = 2;
@@ -54,6 +55,7 @@ class FVulkanStatic
 {
 public:
 	static void InitContext();
+	static void InitContext(VkInstance InInstance, VkPhysicalDevice InPhysicalDevice, VkDevice device);
 	static void ClearContext();
 	static inline std::unique_ptr<FVulkanContext> Context = nullptr;
 };
