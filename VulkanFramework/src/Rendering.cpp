@@ -43,7 +43,26 @@ void FRendering::RunPipeline(const FRunPipelineInfo& RunPipelineInfo)
 	//Begin command buffer
 	auto commandBuffer = VkHelpers::BeginSingleTimeCommands();
 	//Transit color attachment layout to be color attachment optimal
-	VkHelpers::ImageTransition_ToCollorAttachment(RunPipelineInfo.ColorAttachment, commandBuffer, vk::PipelineStageFlagBits::eFragmentShader);
+	VkHelpers::ImageTransition_ToCollorAttachment(RunPipelineInfo.ColorAttachment, commandBuffer);
+
+
+	auto dSets = DescriptorManager.descriptorSetDatas();
+	for (uint16_t dSetId : RunPipelineInfo.DescriptorSets)
+	{
+		for (auto& binding : dSets[dSetId].Bindings)
+		{
+			if (binding.Descriptor.DescriptorType == vk::DescriptorType::eCombinedImageSampler)
+			{
+				if (auto img = MyRTTI::Cast<FImageBuffer>(binding.Buffer))
+				{
+					if (img->GetLayout() != vk::ImageLayout::eShaderReadOnlyOptimal)
+					{
+						VkHelpers::ImageTransition_ToShaderRead(img, commandBuffer);
+					}
+				}
+			}
+		}
+	}
 	//set rendering info
 	commandBuffer.beginRendering(ResultRenderingInfo);
 	//bind pipeline
@@ -54,7 +73,7 @@ void FRendering::RunPipeline(const FRunPipelineInfo& RunPipelineInfo)
 
 	VkDeviceSize offset = 0;
 	//set vertex buffers
-	for(int i = 0; i < RunPipelineInfo.VertexBuffers.size(); i++)
+	for (int i = 0; i < RunPipelineInfo.VertexBuffers.size(); i++)
 	{
 		vkCmdBindVertexBuffers(*commandBuffer, i, 1, RunPipelineInfo.VertexBuffers[i]->GetBuffer(), &offset);
 	}
@@ -68,8 +87,6 @@ void FRendering::RunPipeline(const FRunPipelineInfo& RunPipelineInfo)
 	commandBuffer.drawIndexed(RunPipelineInfo.IndicesCount, RunPipelineInfo.InstancesCount, 0, 0, 0);
 
 	commandBuffer.endRendering();
-	//convert color attachment back into shader read
-	VkHelpers::ImageTransition_ToShaderRead(RunPipelineInfo.ColorAttachment, commandBuffer, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 	//submit command buffer on the queue
 	VkHelpers::EndSingleTimeCommands(commandBuffer);
 }

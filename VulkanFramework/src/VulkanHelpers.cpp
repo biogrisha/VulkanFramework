@@ -1,12 +1,4 @@
 #include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
-#include "VulkanHelpers.h"
 #include "VulkanContext.h"
 #include <fstream>
 vk::raii::ShaderModule VkHelpers::createShaderModule(const std::vector<char>& code, const vk::raii::Device& device)
@@ -89,18 +81,18 @@ void VkHelpers::TransitionImageLayout(const vk::raii::Image& image, vk::ImageLay
 
 void VkHelpers::CopyBufferToImage(FBuffer* Buffer, FImageBuffer* ImageBuffer, const vk::raii::CommandBuffer& CommandBuffer)
 {
-		auto ImageExtent = ImageBuffer->GetExtent();
-		vk::BufferImageCopy region;
-		region.bufferImageHeight = 0;
-		region.bufferRowLength = 0;
-		region.bufferOffset = 0;
-		region.imageExtent = vk::Extent3D{ ImageExtent.width, ImageExtent.height, 1 };
-		region.imageOffset = vk::Offset3D{ 0, 0, 0 };
-		region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
-		region.imageSubresource.layerCount = 1;
-		CommandBuffer.copyBufferToImage(*Buffer->GetBuffer(), ImageBuffer->GetImage(), vk::ImageLayout::eTransferDstOptimal, region);
+	auto ImageExtent = ImageBuffer->GetExtent();
+	vk::BufferImageCopy region;
+	region.bufferImageHeight = 0;
+	region.bufferRowLength = 0;
+	region.bufferOffset = 0;
+	region.imageExtent = vk::Extent3D{ ImageExtent.width, ImageExtent.height, 1 };
+	region.imageOffset = vk::Offset3D{ 0, 0, 0 };
+	region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	CommandBuffer.copyBufferToImage(*Buffer->GetBuffer(), ImageBuffer->GetImage(), vk::ImageLayout::eTransferDstOptimal, region);
 }
 
 void VkHelpers::CopyImageToImage(FImageBuffer* Src, FImageBuffer* Dst, const vk::raii::CommandBuffer& CommandBuffer)
@@ -124,7 +116,7 @@ void VkHelpers::CopyImageToImage(FImageBuffer* Src, FImageBuffer* Dst, const vk:
 void VkHelpers::ClearImage(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	vk::ClearColorValue Color;
-	Color.setFloat32({ 0.2,0,0,0 });
+	Color.setFloat32({ 0.7,0,0,1 });
 	vk::ImageSubresourceRange Range;
 	Range.aspectMask = vk::ImageAspectFlagBits::eColor;
 	Range.baseMipLevel = 0;
@@ -146,7 +138,7 @@ vk::DescriptorType VkHelpers::ConvertBufferToDescriptor(VkBufferUsageFlagBits Bu
 	throw std::runtime_error("Unsupported buffer usage for descriptor type.");
 }
 
-std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuffer)
+std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuffer, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	std::unique_ptr<FBuffer> Buffer = MyRTTI::MakeTypedUnique<FBuffer>();
 	FBufferInfo BufferInfo;
@@ -156,8 +148,6 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 	auto ImageExtent = ImageBuffer->GetExtent();
 	Buffer->Init(ImageExtent.height * ImageExtent.width * 4);
 
-	auto CommandBuffer = BeginSingleTimeCommands();
-	ImageTransition_ToTransferSrc(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eFragmentShader);
 	vk::BufferImageCopy region{};
 	region.bufferOffset = 0;
 	region.bufferRowLength = 0;
@@ -172,16 +162,14 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 	region.imageExtent = vk::Extent3D{ ImageExtent.width, ImageExtent.height, 1 };
 
 	CommandBuffer.copyImageToBuffer(ImageBuffer->GetImage(), vk::ImageLayout::eTransferSrcOptimal, *Buffer->GetBuffer(), region);
-	
-	ImageTransition_ToShaderRead(ImageBuffer, CommandBuffer, vk::PipelineStageFlagBits::eTransfer);
-	EndSingleTimeCommands(CommandBuffer);
+
 	return Buffer;
 }
 
 void VkHelpers::ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer,
 	vk::ImageLayout NewLayout,
-	vk::AccessFlags DstAccess, 
-	vk::PipelineStageFlags SrcStage, vk::PipelineStageFlags DstStage)
+	vk::AccessFlags DstAccess,
+	vk::PipelineStageFlags DstStage)
 {
 	//Fill memory barrier info
 	vk::ImageMemoryBarrier barrier{};
@@ -203,7 +191,7 @@ void VkHelpers::ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::Comm
 	barrier.dstAccessMask = DstAccess;
 
 	CommandBuffer.pipelineBarrier(
-		SrcStage,
+		Image->stage(),
 		DstStage,
 		{},
 		nullptr,
@@ -212,52 +200,49 @@ void VkHelpers::ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::Comm
 	);
 	Image->SetLayout(NewLayout);
 	Image->SetAccess(DstAccess);
+	Image->setStage(DstStage);
 }
 
-void VkHelpers::ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
+void VkHelpers::ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	ImageTransitionGeneral(
 		Image,
 		CommandBuffer,
 		vk::ImageLayout::eTransferSrcOptimal,
 		vk::AccessFlagBits::eTransferRead,
-		SrcStage,
 		vk::PipelineStageFlagBits::eTransfer
 	);
 }
 
-void VkHelpers::ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
+void VkHelpers::ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	ImageTransitionGeneral(
 		Image,
 		CommandBuffer,
 		vk::ImageLayout::eTransferDstOptimal,
 		vk::AccessFlagBits::eTransferWrite,
-		SrcStage,
 		vk::PipelineStageFlagBits::eTransfer
 	);
 }
 
-void VkHelpers::ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
+void VkHelpers::ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	ImageTransitionGeneral(
 		Image,
 		CommandBuffer,
 		vk::ImageLayout::eShaderReadOnlyOptimal,
 		vk::AccessFlagBits::eShaderRead,
-		SrcStage,
 		vk::PipelineStageFlagBits::eFragmentShader
 	);
 }
 
-void VkHelpers::ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage)
+void VkHelpers::ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	ImageTransitionGeneral(
 		Image,
 		CommandBuffer,
 		vk::ImageLayout::eColorAttachmentOptimal,
 		vk::AccessFlagBits::eColorAttachmentWrite,
-		SrcStage,
 		vk::PipelineStageFlagBits::eColorAttachmentOutput
 	);
 }

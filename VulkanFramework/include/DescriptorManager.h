@@ -44,6 +44,7 @@ public:
 	uint16_t MakeDescriptorSet(const std::vector<std::pair<FBufferBase*, vk::ShaderStageFlags>>& Bindings);
 	vk::PipelineLayout GetPipelineLayout(uint16_t LayoutId);
 	std::vector<vk::DescriptorSet> GetDescriptorSets(const std::vector<uint16_t>& SetIds);
+	const std::vector<FDescriptorSet>& descriptorSetDatas() const;
 private:
 	void OnSizeUpdated(FBufferBase* Buffer);
 	void RebindBuffer(FBuffer* Buffer);
@@ -56,6 +57,6 @@ private:
 	std::vector<vk::raii::DescriptorSetLayout> DescriptorSetLayouts;
 	std::vector<vk::raii::PipelineLayout> PipelineLayouts;
 	std::vector<vk::raii::DescriptorSet> DescriptorSets;
-	
+
 	std::vector<boost::signals2::connection> OnResizeConnections;
 };

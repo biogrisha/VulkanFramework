@@ -14,7 +14,7 @@ FImageBuffer::~FImageBuffer()
 FImageBuffer::FImageBuffer(const FImageBufferInfo& ImageBufferInfo)
 {
 	Info = ImageBufferInfo;
-	Info.UsageFlags |= vk::ImageUsageFlagBits::eSampled;
+	Init();
 }
 
 FImageBuffer::FImageBuffer(VkImage ExternalImage, vk::ImageLayout ImageLayout, vk::AccessFlags ImageAccess, const FImageBufferInfo& ImageBufferInfo)
@@ -31,7 +31,7 @@ void FImageBuffer::SetExtent(const vk::Extent3D& InExtent)
 	if (InExtent != Info.Extent)
 	{
 		Info.Extent = InExtent;
-		if(bInitialized)
+		if (bInitialized)
 		{
 			auto OldAllocation = Allocation;
 			auto OldImage = Image;
@@ -62,12 +62,10 @@ void FImageBuffer::Init()
 	VmaAllocationCreateInfo AllocInfo = {};
 	AllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	AllocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
 	//Create image
 	vmaCreateImage(FVulkanStatic::Context->VmaAllocator, &ImageCreateInfo, &AllocInfo, &Image, &Allocation, nullptr);
-
 	//Fill image view info
-	vk::ImageViewCreateInfo ViewInfo({}, Image, VkHelpers::ToImageViewType(Info.Type), Info.Format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+	vk::ImageViewCreateInfo ViewInfo({}, Image, VkHelpers::ToImageViewType(Info.Type), Info.Format, {}, { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 	ImageView = vk::raii::ImageView(FVulkanStatic::Context->Device, ViewInfo);
 
 	//Fill sampler info
@@ -89,47 +87,13 @@ void FImageBuffer::Init()
 	//Create sampler
 	Sampler = vk::raii::Sampler(FVulkanStatic::Context->Device, SamplerInfo);
 
-	//Start command (transfer undefined->shader read only)
-	auto CommandBuffer = VkHelpers::BeginSingleTimeCommands();
-
-	//Fill memory barrier info
-	vk::ImageMemoryBarrier barrier{};
-	barrier.image = Image;
-
-	barrier.oldLayout = vk::ImageLayout::eUndefined;
-	barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-	barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-
-	barrier.srcAccessMask = vk::AccessFlags{};
-	barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-
-	CommandBuffer.pipelineBarrier(
-		vk::PipelineStageFlagBits::eTopOfPipe,
-		vk::PipelineStageFlagBits::eFragmentShader,
-		{},
-		nullptr,
-		nullptr,
-		barrier
-	);
-
-	VkHelpers::EndSingleTimeCommands(CommandBuffer);
-	Layout = vk::ImageLayout::eShaderReadOnlyOptimal;
-	Access = vk::AccessFlagBits::eShaderRead;
 	//Cache descriptor info
 	DescriptorImageInfo = vk::DescriptorImageInfo(Sampler, ImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
 
 	bInitialized = true;
 }
 
-void FImageBuffer::UpdateImageFromData(void* InDataPointer, vk::PipelineStageFlags FromStage)
+void FImageBuffer::UpdateImageFromData(void* InDataPointer)
 {
 	assert(Info.Type == vk::ImageType::e2D);
 
@@ -148,9 +112,9 @@ void FImageBuffer::UpdateImageFromData(void* InDataPointer, vk::PipelineStageFla
 
 	//Copy buffer into image
 	auto CommandBuffer = VkHelpers::BeginSingleTimeCommands();
-	VkHelpers::ImageTransition_ToTransferDst(this, CommandBuffer, FromStage);
+	VkHelpers::ImageTransition_ToTransferDst(this, CommandBuffer);
 	VkHelpers::CopyBufferToImage(StagingBuffer.get(), this, CommandBuffer);
-	VkHelpers::ImageTransition_ToShaderRead(this, CommandBuffer, vk::PipelineStageFlagBits::eTransfer);
+	VkHelpers::ImageTransition_ToShaderRead(this, CommandBuffer);
 	VkHelpers::EndSingleTimeCommands(CommandBuffer);
 }
 
@@ -188,14 +152,19 @@ vk::DescriptorImageInfo* FImageBuffer::GetDescriptorImageInfo()
 	return &DescriptorImageInfo;
 }
 
-vk::ImageLayout FImageBuffer::GetLayout()
+vk::ImageLayout FImageBuffer::GetLayout() const
 {
 	return Layout;
 }
 
-vk::AccessFlags FImageBuffer::GetAccess()
+vk::AccessFlags FImageBuffer::GetAccess() const
 {
 	return Access;
+}
+
+vk::PipelineStageFlags FImageBuffer::stage() const
+{
+	return m_stage;
 }
 
 void FImageBuffer::SetLayout(vk::ImageLayout InLayout)
@@ -206,4 +175,9 @@ void FImageBuffer::SetLayout(vk::ImageLayout InLayout)
 void FImageBuffer::SetAccess(vk::AccessFlags InAccess)
 {
 	Access = InAccess;
+}
+
+void FImageBuffer::setStage(vk::PipelineStageFlags stage)
+{
+	m_stage = stage;
 }

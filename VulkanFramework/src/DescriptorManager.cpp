@@ -46,7 +46,7 @@ void FDescriptorManager::Init()
 		pipelineLayoutInfo.pSetLayouts = PLineDescriptorSetLayouts.data();
 		PipelineLayouts.emplace_back(FVulkanStatic::Context->Device, pipelineLayoutInfo);
 	}
-	
+
 	// Count descriptors by type
 	std::unordered_map<vk::DescriptorType, uint32_t> descriptorCounts;
 	for (auto& DescriptorSetData : DescriptorSetDatas)
@@ -162,7 +162,7 @@ uint16_t FDescriptorManager::MakeDescriptorSet(const std::vector<std::pair<FBuff
 	for (size_t LayoutId = 0; LayoutId < DescriptorSetLayoutDatas.size(); LayoutId++)
 	{
 		auto& Descriptors = DescriptorSetLayoutDatas[LayoutId].Descriptors;
-		if(Descriptors.size() == Bindings.size())
+		if (Descriptors.size() == Bindings.size())
 		{
 			//found layout of same size
 			bool bFoundLayout = true;
@@ -218,6 +218,11 @@ std::vector<vk::DescriptorSet> FDescriptorManager::GetDescriptorSets(const std::
 	return Result;
 }
 
+const std::vector<FDescriptorSet>& FDescriptorManager::descriptorSetDatas() const
+{
+	return DescriptorSetDatas;
+}
+
 void FDescriptorManager::OnSizeUpdated(FBufferBase* Buffer)
 {
 	if (auto AsBuffer = MyRTTI::Cast<FBuffer>(Buffer))
@@ -242,7 +247,7 @@ void FDescriptorManager::RebindBuffer(FBuffer* Buffer)
 		for (uint32_t BindingId = 0; BindingId < Bindings.size(); BindingId++)
 		{
 			//Iterate bindings
-			if(Bindings[BindingId].Buffer == Buffer)
+			if (Bindings[BindingId].Buffer == Buffer)
 			{
 				//found buffer in bound buffers
 				//create descriptor set write for it

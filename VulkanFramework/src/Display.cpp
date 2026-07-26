@@ -56,7 +56,7 @@ void FDisplay::DrawFrame()
 	FVulkanStatic::Context->Device.resetFences(*InFlightFences[CurrentFrame]);
 
 	//write command buffer
-	if(bFrameBufferResized)
+	if (bFrameBufferResized)
 	{
 		DisplayRender->SetResolution(Width, Height);
 	}
@@ -75,24 +75,24 @@ void FDisplay::DrawFrame()
 	VkHelpers::ImageTransitionGeneral(&DstImage, CommandBuffers[CurrentFrame],
 		vk::ImageLayout::eTransferDstOptimal,
 		vk::AccessFlagBits::eTransferWrite,
-		vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eTransfer);
+		vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
 	VkHelpers::ImageTransitionGeneral(SrcImage, CommandBuffers[CurrentFrame],
 		vk::ImageLayout::eTransferSrcOptimal,
 		vk::AccessFlagBits::eTransferRead,
-		vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eTransfer);
+		vk::PipelineStageFlagBits::eFragmentShader);
 
 	VkHelpers::CopyImageToImage(SrcImage, &DstImage, CommandBuffers[CurrentFrame]);
 
 	VkHelpers::ImageTransitionGeneral(&DstImage, CommandBuffers[CurrentFrame],
 		vk::ImageLayout::ePresentSrcKHR,
 		{},
-		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe);
+		vk::PipelineStageFlagBits::eTransfer);
 
 	VkHelpers::ImageTransitionGeneral(SrcImage, CommandBuffers[CurrentFrame],
 		vk::ImageLayout::eShaderReadOnlyOptimal,
 		vk::AccessFlagBits::eShaderRead,
-		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader);
+		vk::PipelineStageFlagBits::eTransfer);
 
 	CommandBuffers[CurrentFrame].end();
 	//submit commands info to run after present semaphore and signal rendering semaphore

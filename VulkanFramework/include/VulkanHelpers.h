@@ -10,7 +10,7 @@
     std::cout << "TEST " << __FILE__ << " " << __LINE__ << std::endl;
 
 namespace VkHelpers
-{ 
+{
 	[[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code, const vk::raii::Device& device);
 
 	std::vector<char> readFile(const std::string& filename);
@@ -31,23 +31,23 @@ namespace VkHelpers
 
 	vk::DescriptorType ConvertBufferToDescriptor(VkBufferUsageFlagBits BufferUsage);
 
-	std::unique_ptr<FBuffer> ConvertImageToBuffer(FImageBuffer* ImageBuffer);
+	std::unique_ptr<FBuffer> ConvertImageToBuffer(FImageBuffer* ImageBuffer, const vk::raii::CommandBuffer& CommandBuffer);
 
 	void ImageTransitionGeneral(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer,
 		vk::ImageLayout NewLayout,
-		vk::AccessFlags DstAccess, 
-		vk::PipelineStageFlags SrcStage, vk::PipelineStageFlags DstStage);
-	
-	void ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
-	void ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
-	void ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
-	void ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer, vk::PipelineStageFlags SrcStage);
-	
+		vk::AccessFlags DstAccess,
+		vk::PipelineStageFlags DstStage);
+
+	void ImageTransition_ToTransferSrc(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
+	void ImageTransition_ToTransferDst(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
+	void ImageTransition_ToShaderRead(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
+	void ImageTransition_ToCollorAttachment(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer);
+
 	vk::ImageViewType ToImageViewType(vk::ImageType type, bool isArray = false);
 }
 
 namespace NVkHelpers
 {
-	[[nodiscard]] VkShaderModule createShaderModule(const uint32_t* code,uint32_t size, VkDevice device);
+	[[nodiscard]] VkShaderModule createShaderModule(const uint32_t* code, uint32_t size, VkDevice device);
 }
 

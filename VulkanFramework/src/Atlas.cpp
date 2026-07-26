@@ -24,10 +24,9 @@ void FAtlas::Init()
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	FImageBufferInfo Info;
-	Info.Extent = vk::Extent3D{ uint32_t(texWidth), uint32_t(texHeight), 1};
-	Info.UsageFlags |= vk::ImageUsageFlagBits::eTransferDst;
+	Info.Extent = vk::Extent3D{ uint32_t(texWidth), uint32_t(texHeight), 1 };
+	Info.UsageFlags = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
 	Image = MyRTTI::MakeTypedUnique<FImageBuffer>(Info);
-	Image->Init();
 	Image->UpdateImageFromData(pixels);
 
 	std::string MetaPath = Path + ".json";
@@ -59,6 +58,6 @@ FSpriteInfo FAtlas::GetInfo(const std::string& Name)
 			return Result;
 		}
 	}
-	
+
 	return FSpriteInfo();
 }
