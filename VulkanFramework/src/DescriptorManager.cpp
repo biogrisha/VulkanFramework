@@ -258,6 +258,7 @@ void FDescriptorManager::RebindBuffer(FBuffer* Buffer)
 				Writes.push_back(Write);
 			}
 		}
+		++DescriptorSetId;
 	}
 
 	FVulkanStatic::Context->Device.updateDescriptorSets(Writes, {});

@@ -116,7 +116,7 @@ void VkHelpers::CopyImageToImage(FImageBuffer* Src, FImageBuffer* Dst, const vk:
 void VkHelpers::ClearImage(FImageBuffer* Image, const vk::raii::CommandBuffer& CommandBuffer)
 {
 	vk::ClearColorValue Color;
-	Color.setFloat32({ 0.7,0,0,1 });
+	Color.setFloat32({ 0,0,0,0 });
 	vk::ImageSubresourceRange Range;
 	Range.aspectMask = vk::ImageAspectFlagBits::eColor;
 	Range.baseMipLevel = 0;
@@ -146,7 +146,7 @@ std::unique_ptr<FBuffer> VkHelpers::ConvertImageToBuffer(FImageBuffer* ImageBuff
 	BufferInfo.Usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	Buffer->SetProperties(BufferInfo);
 	auto ImageExtent = ImageBuffer->GetExtent();
-	Buffer->Init(ImageExtent.height * ImageExtent.width * 4);
+	Buffer->InitBuffer(ImageExtent.height * ImageExtent.width * 4);
 
 	vk::BufferImageCopy region{};
 	region.bufferOffset = 0;

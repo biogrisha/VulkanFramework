@@ -14,7 +14,7 @@ void FBuffer::SetProperties(const FBufferInfo& InBufferInfo)
 	BufferInfo = InBufferInfo;
 }
 
-void FBuffer::SetData(uint16_t InSize, const void* Data)
+void FBuffer::SetData(uint32_t InSize, const void* Data)
 {
 	bInitialized = true;
 	if (BufferInfo.bDeviceLocal)
@@ -27,7 +27,7 @@ void FBuffer::SetData(uint16_t InSize, const void* Data)
 	}
 }
 
-void FBuffer::Init(uint32_t InSize)
+void FBuffer::InitBuffer(uint32_t InSize)
 {
 	Size = InSize;
 	VkBufferCreateInfo bufCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -45,6 +45,20 @@ void FBuffer::Init(uint32_t InSize)
 	{
 		AllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	}
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(*(FVulkanStatic::Context->PhysicalDevice), &memProps);
+
+	VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+	vmaGetHeapBudgets(FVulkanStatic::Context->VmaAllocator, budgets);
+
+	for (uint32_t i = 0; i < memProps.memoryHeapCount; ++i)
+	{
+		std::cout << "Heap " << i << '\n';
+		std::cout << "  Size:   " << memProps.memoryHeaps[i].size << '\n';
+		std::cout << "  Usage:  " << budgets[i].usage << '\n';
+		std::cout << "  Budget: " << budgets[i].budget << '\n';
+		std::cout << "  Free:   " << budgets[i].budget - budgets[i].usage << '\n';
+	}
 	auto Res = vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &bufCreateInfo, &AllocInfo, &Buffer, &Allocation, nullptr);
 	SizeUpdated();
 }
@@ -54,7 +68,7 @@ VkBuffer* FBuffer::GetBuffer()
 	return &Buffer;
 }
 
-uint16_t FBuffer::GetSize()
+uint32_t FBuffer::GetSize()
 {
 	return Size;
 }
@@ -108,8 +122,9 @@ void FBuffer::MapMemoryHostVisible(uint32_t InSize, const void* Data)
 		//creating a new buffer
 		VkBuffer buf;
 		VmaAllocation alloc;
+		std::cout << "Buffer created2\n";
 		vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &bufCreateInfo, &allocCreateInfo, &buf, &alloc, nullptr);
-		
+
 		auto OldBuffer = Buffer;
 		auto OldAllocation = Allocation;
 		auto OldSize = Size;
@@ -176,7 +191,7 @@ void FBuffer::MapMemoryDeviceLocal(uint32_t InSize, const void* Data)
 		Allocation = alloc;
 		Buffer = buf;
 		SizeUpdated();
-		
+
 		//Destroy old buffer only after OnSizeUpdated callback
 		if (OldSize != 0)
 		{
@@ -196,6 +211,7 @@ void FBuffer::MapMemoryDeviceLocal(uint32_t InSize, const void* Data)
 
 	VkBuffer StagingBuffer;
 	VmaAllocation StagingAlloc;
+	std::cout << "Buffer created4\n";
 	auto Res = vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &StagingBufferCreateInfo, &StagingAllocCreateInfo, &StagingBuffer, &StagingAlloc, nullptr);
 	switch (Res) {
 	case VK_SUCCESS:
