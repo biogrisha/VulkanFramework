@@ -14,7 +14,7 @@ void FBuffer::SetProperties(const FBufferInfo& InBufferInfo)
 	BufferInfo = InBufferInfo;
 }
 
-void FBuffer::SetData(uint32_t InSize, const void* Data)
+void FBuffer::SetData(VkDeviceSize InSize, const void* Data)
 {
 	bInitialized = true;
 	if (BufferInfo.bDeviceLocal)
@@ -27,7 +27,7 @@ void FBuffer::SetData(uint32_t InSize, const void* Data)
 	}
 }
 
-void FBuffer::InitBuffer(uint32_t InSize)
+void FBuffer::InitBuffer(VkDeviceSize InSize)
 {
 	Size = InSize;
 	VkBufferCreateInfo bufCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -50,16 +50,7 @@ void FBuffer::InitBuffer(uint32_t InSize)
 
 	VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
 	vmaGetHeapBudgets(FVulkanStatic::Context->VmaAllocator, budgets);
-
-	for (uint32_t i = 0; i < memProps.memoryHeapCount; ++i)
-	{
-		std::cout << "Heap " << i << '\n';
-		std::cout << "  Size:   " << memProps.memoryHeaps[i].size << '\n';
-		std::cout << "  Usage:  " << budgets[i].usage << '\n';
-		std::cout << "  Budget: " << budgets[i].budget << '\n';
-		std::cout << "  Free:   " << budgets[i].budget - budgets[i].usage << '\n';
-	}
-	auto Res = vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &bufCreateInfo, &AllocInfo, &Buffer, &Allocation, nullptr);
+	vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &bufCreateInfo, &AllocInfo, &Buffer, &Allocation, nullptr);
 	SizeUpdated();
 }
 
@@ -68,7 +59,7 @@ VkBuffer* FBuffer::GetBuffer()
 	return &Buffer;
 }
 
-uint32_t FBuffer::GetSize()
+VkDeviceSize FBuffer::GetSize()
 {
 	return Size;
 }
@@ -103,7 +94,7 @@ void FBuffer::Destroy()
 	}
 }
 
-void FBuffer::MapMemoryHostVisible(uint32_t InSize, const void* Data)
+void FBuffer::MapMemoryHostVisible(VkDeviceSize InSize, const void* Data)
 {
 	if (InSize > Size)
 	{
@@ -145,8 +136,9 @@ void FBuffer::MapMemoryHostVisible(uint32_t InSize, const void* Data)
 	vmaCopyMemoryToAllocation(FVulkanStatic::Context->VmaAllocator, Data, Allocation, 0, InSize);
 }
 
-void FBuffer::MapMemoryDeviceLocal(uint32_t InSize, const void* Data)
+void FBuffer::MapMemoryDeviceLocal(VkDeviceSize InSize, const void* Data)
 {
+	VkDeviceSize tempSize = Size;
 	if (InSize > Size)
 	{
 		//If size required become larger
@@ -211,7 +203,6 @@ void FBuffer::MapMemoryDeviceLocal(uint32_t InSize, const void* Data)
 
 	VkBuffer StagingBuffer;
 	VmaAllocation StagingAlloc;
-	std::cout << "Buffer created4\n";
 	auto Res = vmaCreateBuffer(FVulkanStatic::Context->VmaAllocator, &StagingBufferCreateInfo, &StagingAllocCreateInfo, &StagingBuffer, &StagingAlloc, nullptr);
 	switch (Res) {
 	case VK_SUCCESS:
@@ -231,7 +222,13 @@ void FBuffer::MapMemoryDeviceLocal(uint32_t InSize, const void* Data)
 		break;
 	}
 	//write into staging buffer
-	vmaCopyMemoryToAllocation(FVulkanStatic::Context->VmaAllocator, Data, StagingAlloc, 0, InSize);
+	vmaCopyMemoryToAllocation(
+		FVulkanStatic::Context->VmaAllocator,
+		Data,
+		StagingAlloc,
+		0,
+		InSize);
+
 	//copy data into device local buffer
 	VkHelpers::CopyBufferRaw(&StagingBuffer, &Buffer, InSize);
 	//destroy staging buffer

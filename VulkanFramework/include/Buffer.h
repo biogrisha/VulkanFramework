@@ -17,8 +17,8 @@ class FBuffer : public FBufferBase
 public:
 	~FBuffer();
 	void SetProperties(const FBufferInfo& InBufferInfo);
-	void SetData(uint32_t InSize, const void* Data);
-	void InitBuffer(uint32_t InSize);
+	void SetData(VkDeviceSize InSize, const void* Data);
+	void InitBuffer(VkDeviceSize InSize);
 	template<typename T>
 	void SetData(const std::vector<T>& Data)
 	{
@@ -33,7 +33,7 @@ public:
 	}
 
 	VkBuffer* GetBuffer();
-	uint32_t GetSize();
+	VkDeviceSize GetSize();
 	const FBufferInfo& GetBufferInfo();
 	vk::DescriptorBufferInfo* GetDescriptorBufferInfo();
 	void* MapData();
@@ -51,6 +51,3 @@ private:
 	FBufferInfo BufferInfo;
 	vk::DescriptorBufferInfo DescriptorBufferInfo;
 };
-
-
-
