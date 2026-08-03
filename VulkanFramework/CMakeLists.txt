@@ -52,6 +52,3 @@ target_link_libraries(VulkanFramework
 		MyRTTI
 		nlohmann_json::nlohmann_json
 )
-
-target_compile_options(VulkanFramework PRIVATE /fsanitize=address)
-target_link_options(VulkanFramework PRIVATE /fsanitize=address)

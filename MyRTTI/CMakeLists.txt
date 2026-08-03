@@ -14,5 +14,3 @@ target_include_directories(MyRTTI
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_options(MyRTTI PRIVATE /fsanitize=address)
-target_link_options(MyRTTI PRIVATE /fsanitize=address)

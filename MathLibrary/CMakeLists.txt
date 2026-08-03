@@ -10,5 +10,3 @@ target_include_directories(MathLibrary
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_options(MathLibrary PRIVATE /fsanitize=address)
-target_link_options(MathLibrary PRIVATE /fsanitize=address)
